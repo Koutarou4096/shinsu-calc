@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>進数変換電卓（計算過程つき）</title>
+
+    <!-- Tailwind CSSをCDNから読み込み、画面のレイアウトや装飾に使用する。 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- 画面表示用のフォントを読み込む。 -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+
+    <!-- ボタン等に使用するLucideアイコンを読み込む。 -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <script>
+        /*
+         * Tailwind CSSの設定。
+         * ここではアプリ全体で使用するフォントとブランドカラーを定義する。
+         */
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#f0fdfa',
+                            100: '#ccfbf1',
+                            500: '#14b8a6',
+                            600: '#0d9488',
+                            700: '#0f766e',
+                        }
+                    }
+                }
+            }
+        };
+    </script>
+
+    <style>
+        body {
+            background-color: #f1f5f9;
+            background-image: radial-gradient(#cbd5e1 1px, transparent 1px);
+            background-size: 24px 24px;
+        }
+
+        .math-block {
+            background-color: #f8fafc;
+            border-left: 4px solid #14b8a6;
+            padding: 1rem;
+            margin-top: 1rem;
+            margin-bottom: 1rem;
+            border-radius: 0 0.5rem 0.5rem 0;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+            overflow-x: auto;
+        }
+
+        .step-title {
+            font-weight: 600;
+            color: #334155;
+            margin-top: 1.5rem;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .fade-in {
+            animation: fadeIn 0.4s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+
+<body class="min-h-screen flex flex-col items-center justify-center p-4 sm:p-8 text-slate-800">
+
+    <main class="w-full max-w-3xl bg-white/90 backdrop-blur-md shadow-2xl rounded-3xl overflow-hidden border border-slate-200">
+        <!-- ヘッダー -->
+        <header class="bg-brand-600 p-6 text-white text-center">
+            <h1 class="text-2xl sm:text-3xl font-bold flex items-center justify-center gap-3">
+                <i data-lucide="binary" class="w-8 h-8" aria-hidden="true"></i>
+                進数変換電卓
+            </h1>
+            <p class="text-brand-100 mt-2 text-sm sm:text-base">
+                2進数・8進数・10進数・16進数の変換に対応。計算のステップも詳しく解説します。
+            </p>
+        </header>
+
+        <section class="p-6 sm:p-8">
+            <div class="grid grid-cols-1 md:grid-cols-5 gap-6 items-end">
+
+                <!-- 変換元の進数 -->
+                <div class="md:col-span-2 space-y-2">
+                    <label for="from-base" class="block text-sm font-medium text-slate-600">
+                        変換元の進数
+                    </label>
+                    <select id="from-base"
+                        class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all">
+                    </select>
+                </div>
+
+                <!-- 進数の入れ替えボタン -->
+                <div class="flex justify-center md:col-span-1 pb-1">
+                    <button id="swap-btn"
+                        type="button"
+                        class="p-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full transition-colors active:scale-95"
+                        title="進数を入れ替える"
+                        aria-label="変換元と変換先の進数を入れ替える">
+                        <i data-lucide="arrow-left-right" class="w-5 h-5 hidden md:block" aria-hidden="true"></i>
+                        <i data-lucide="arrow-up-down" class="w-5 h-5 block md:hidden" aria-hidden="true"></i>
+                    </button>
+                </div>
+
+                <!-- 変換先の進数 -->
+                <div class="md:col-span-2 space-y-2">
+                    <label for="to-base" class="block text-sm font-medium text-slate-600">
+                        変換先の進数
+                    </label>
+                    <select id="to-base"
+                        class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all">
+                    </select>
+                </div>
+            </div>
+
+            <!-- 数値入力欄 -->
+            <div class="mt-6 space-y-2">
+                <label for="num-input" class="block text-sm font-medium text-slate-600">
+                    変換する数値
+                </label>
+
+                <div class="relative">
+                    <input type="text"
+                        id="num-input"
+                        placeholder="数値を入力してください (例: 10, 1011, FF)"
+                        autocomplete="off"
+                        spellcheck="false"
+                        aria-describedby="error-msg"
+                        aria-invalid="false"
+                        class="w-full p-4 text-lg font-mono bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all uppercase placeholder:normal-case placeholder:text-slate-400">
+
+                    <div id="error-msg"
+                        class="absolute -bottom-6 left-1 text-xs text-red-500 font-medium hidden"
+                        role="alert">
+                        選択した進数に対して無効な入力です。
+                    </div>
+                </div>
+            </div>
+
+            <!-- 計算開始ボタン -->
+            <button id="convert-btn"
+                type="button"
+                class="w-full mt-8 bg-brand-600 hover:bg-brand-700 text-white font-semibold py-4 rounded-xl shadow-lg shadow-brand-500/30 transition-all active:scale-[0.98] flex items-center justify-center gap-2">
+                <i data-lucide="calculator" class="w-5 h-5" aria-hidden="true"></i>
+                計算する
+            </button>
+        </section>
+
+        <!-- 計算結果 -->
+        <section id="result-section"
+            class="hidden border-t border-slate-100 bg-slate-50 p-6 sm:p-8"
+            aria-live="polite">
+
+            <!-- 最終結果 -->
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 text-center mb-8">
+                <p class="text-sm text-slate-500 font-medium uppercase tracking-wider mb-2">
+                    変換結果
+                </p>
+
+                <div class="text-4xl sm:text-5xl font-bold font-mono text-brand-600 break-all"
+                    id="final-result">
+                </div>
+
+                <p class="text-slate-400 mt-2 text-sm" id="result-subtext"></p>
+            </div>
+
+            <!-- 計算過程 -->
+            <div>
+                <h3 class="text-xl font-bold text-slate-800 flex items-center gap-2 border-b border-slate-200 pb-2">
+                    <i data-lucide="list-ordered" class="w-6 h-6 text-brand-500" aria-hidden="true"></i>
+                    計算のステップ
+                </h3>
+
+                <div id="steps-container" class="mt-4 text-slate-700 leading-relaxed"></div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        /*
+         * ============================================================
+         * 進数変換電卓 JavaScript
+         * ============================================================
+         *
+         * このScriptは、入力値の検証、進数選択肢の生成、
+         * 進数変換、計算過程のHTML生成、画面更新をすべて担当する。
+         *
+         * 重要:
+         * - JavaScriptのNumberではなくBigIntを使用して整数を扱う。
+         * - そのため、Number.MAX_SAFE_INTEGERを超える整数でも
+         *   精度を失わずに変換できる。
+         * - このアプリにはサーバー側のバックエンドは存在せず、
+         *   変換処理はすべてブラウザ上で完結する。
+         */
+
+        // ------------------------------------------------------------
+        // 1. DOM要素を取得する
+        // ------------------------------------------------------------
+
+        // 変換元の進数を選択する<select>要素を取得する。
+        const fromBaseSelect = document.getElementById('from-base');
+
+        // 変換先の進数を選択する<select>要素を取得する。
+        const toBaseSelect = document.getElementById('to-base');
+
+        // 変換対象の数値を入力する<input>要素を取得する。
+        const numInput = document.getElementById('num-input');
+
+        // 変換元と変換先を入れ替えるボタンを取得する。
+        const swapBtn = document.getElementById('swap-btn');
+
+        // 変換処理を開始するボタンを取得する。
+        const convertBtn = document.getElementById('convert-btn');
+
+        // 入力エラーを表示する要素を取得する。
+        const errorMsg = document.getElementById('error-msg');
+
+        // 計算結果全体を表示する<section>要素を取得する。
+        const resultSection = document.getElementById('result-section');
+
+        // 最終的な変換結果を表示する要素を取得する。
+        const finalResultEl = document.getElementById('final-result');
+
+        // 「○進数から○進数」という補足説明を表示する要素を取得する。
+        const resultSubtextEl = document.getElementById('result-subtext');
+
+        // 計算過程を表示するコンテナを取得する。
+        const stepsContainer = document.getElementById('steps-container');
+
+
+        // ------------------------------------------------------------
+        // 2. 使用可能な進数を定義する
+        // ------------------------------------------------------------
+
+        // このアプリで許可する進数を一元管理する。
+        // 入力検証と<select>生成で同じ値を使用することで、
+        // フロントエンドの表示と内部処理の対応関係を保つ。
+        const ALLOWED_BASES = [2, 8, 10, 16];
+
+
+        // ------------------------------------------------------------
+        // 3. 進数選択欄を生成する
+        // ------------------------------------------------------------
+
+        function populateBases() {
+            // 既存の選択肢を一度空にする。
+            // 初期化処理が複数回実行されても重複しないようにする。
+            fromBaseSelect.replaceChildren();
+            toBaseSelect.replaceChildren();
+
+            // 許可された各進数について選択肢を作成する。
+            ALLOWED_BASES.forEach(base => {
+                // 変換元側の<option>要素を作成する。
+                const fromOption = document.createElement('option');
+
+                // <option>の内部値として進数そのものを設定する。
+                fromOption.value = String(base);
+
+                // ユーザーに表示する文字列を設定する。
+                fromOption.textContent = `${base}進数`;
+
+                // 変換元の<select>へ追加する。
+                fromBaseSelect.appendChild(fromOption);
+
+
+                // 変換先側の<option>要素を作成する。
+                const toOption = document.createElement('option');
+
+                // <option>の内部値として進数そのものを設定する。
+                toOption.value = String(base);
+
+                // ユーザーに表示する文字列を設定する。
+                toOption.textContent = `${base}進数`;
+
+                // 変換先の<select>へ追加する。
+                toBaseSelect.appendChild(toOption);
+            });
+
+            // 初期状態では10進数から2進数への変換を選択する。
+            fromBaseSelect.value = '10';
+            toBaseSelect.value = '2';
+        }
+
+
+        // ------------------------------------------------------------
+        // 4. エラー表示を制御する
+        // ------------------------------------------------------------
+
+        function showError(message) {
+            // エラー内容を画面へ表示する。
+            errorMsg.textContent = message;
+
+            // hiddenクラスを外してエラー表示を有効にする。
+            errorMsg.classList.remove('hidden');
+
+            // 入力欄をエラー状態の見た目に変更する。
+            numInput.classList.add('border-red-500', 'focus:ring-red-500');
+
+            // 通常時の枠線・フォーカス色を外す。
+            numInput.classList.remove('border-slate-200', 'focus:ring-brand-500');
+
+            // アクセシビリティ用に入力値が無効であることを明示する。
+            numInput.setAttribute('aria-invalid', 'true');
+        }
+
+
+        function hideError() {
+            // エラー表示を非表示にする。
+            errorMsg.classList.add('hidden');
+
+            // エラー用の枠線・フォーカス色を外す。
+            numInput.classList.remove('border-red-500', 'focus:ring-red-500');
+
+            // 通常時の枠線・フォーカス色へ戻す。
+            numInput.classList.add('border-slate-200', 'focus:ring-brand-500');
+
+            // アクセシビリティ用に入力値が有効であることを示す。
+            numInput.setAttribute('aria-invalid', 'false');
+        }
+
+
+        // ------------------------------------------------------------
+        // 5. 入力値を検証する
+        // ------------------------------------------------------------
+
+        function validateInput() {
+            // 入力値から前後の空白を除去し、大文字へ統一する。
+            const value = numInput.value.trim().toUpperCase();
+
+            // <select>の文字列値を10進整数へ変換して進数として取得する。
+            const base = Number.parseInt(fromBaseSelect.value, 10);
+
+            // 入力欄が空なら、まだ入力途中と判断してエラーを出さない。
+            if (value === '') {
+                hideError();
+                return true;
+            }
+
+            // 内部的な設定値が許可された進数か確認する。
+            // 通常の操作では発生しないが、DOM改変等に対する防御になる。
+            if (!ALLOWED_BASES.includes(base)) {
+                showError('対応していない進数が選択されています。');
+                return false;
+            }
+
+            // 進数ごとに使用可能な文字を作る。
+            // 2進数なら「01」、8進数なら「01234567」、
+            // 10進数なら「0123456789」、16進数なら「0123456789ABCDEF」となる。
+            const validChars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'.slice(0, base);
+
+            // 使用可能な文字だけで構成されているかを判定する正規表現を作る。
+            const regex = new RegExp(`^[${validChars}]+$`);
+
+            // 入力値全体が正規表現に一致するか確認する。
+            if (!regex.test(value)) {
+                // 一致しなければ、その進数では使用できない文字が含まれている。
+                showError(`${base}進数として無効な文字が含まれています。`);
+                return false;
+            }
+
+            // 入力値が有効ならエラー表示を消す。
+            hideError();
+
+            // 呼び出し元へ「入力は有効」と返す。
+            return true;
+        }
+
+
+        // ------------------------------------------------------------
+        // 6. 表示用のべき乗表記を作る
+        // ------------------------------------------------------------
+
+        function formatPower(base, power) {
+            // HTMLの<sup>を使い、「2²」「16³」のような見た目を作る。
+            return `${base}<sup>${power}</sup>`;
+        }
+
+
+        // ------------------------------------------------------------
+        // 7. 計算結果を変更前の古い状態にしない
+        // ------------------------------------------------------------
+
+        function invalidateResult() {
+            // 入力値や進数を変更した時点で、以前の計算結果を隠す。
+            // これにより「画面上の入力」と「表示中の結果」が
+            // 異なる状態になるUI上の不整合を防ぐ。
+            resultSection.classList.add('hidden');
+
+            // 前回の計算結果を消す。
+            finalResultEl.textContent = '';
+
+            // 前回の補足説明を消す。
+            resultSubtextEl.textContent = '';
+
+            // 前回の計算過程を消す。
+            stepsContainer.replaceChildren();
+        }
+
+
+        // ------------------------------------------------------------
+        // 8. 入力された数値を10進数へ変換し、計算過程を作る
+        // ------------------------------------------------------------
+
+        function generateStepsToDecimal(valueStr, fromBase) {
+            // 計算過程の最初の見出しを作る。
+            let html =
+                `<div class="step-title">` +
+                `<div class="bg-brand-100 text-brand-700 w-6 h-6 rounded-full flex items-center justify-center text-sm">1</div>` +
+                `${fromBase}進数の ${valueStr} を 10進数 に変換する` +
+                `</div>`;
+
+            // 桁の重みを使って10進数へ変換する方法を説明する。
+            html +=
+                `<p class="mb-2">` +
+                `10進数へ変換するには、各桁の数値に、その桁の重み（基数 ${fromBase} のべき乗）を掛け合わせて合計します。` +
+                `右端の桁の重みは ${fromBase}<sup>0</sup> です。` +
+                `</p>`;
+
+            // 進数をBigIntへ変換し、以降のべき乗計算もBigIntで行う。
+            const baseBig = BigInt(fromBase);
+
+            // 各桁の値を合計するためのBigInt変数を0で初期化する。
+            let sum = 0n;
+
+            // 「A × 16² + B × 16¹」のような説明用文字列を保存する配列を作る。
+            const calcParts = [];
+
+            // 「10 × 256」のような数値計算用文字列を保存する配列を作る。
+            const detailParts = [];
+
+            // 入力値の桁数を取得する。
+            const length = valueStr.length;
+
+            // 計算式を囲む領域を開始する。
+            html += `<div class="math-block">`;
+
+            // 左端の桁から右端の桁まで1桁ずつ処理する。
+            for (let i = 0; i < length; i++) {
+                // 現在の文字を大文字に統一する。
+                const char = valueStr[i].toUpperCase();
+
+                // 文字を指定された進数の数値へ変換する。
+                const digitVal = Number.parseInt(char, fromBase);
+
+                // 現在の桁が右端から何桁目かを求める。
+                const power = length - 1 - i;
+
+                // 基数のべき乗をBigIntで計算する。
+                const placeValue = baseBig ** BigInt(power);
+
+                // 「桁の値 × 桁の重み」を合計へ加える。
+                sum += BigInt(digitVal) * placeValue;
+
+                // A〜Fなどの文字を使う進数では、対応する10進値も併記する。
+                let charStr = char;
+
+                // 16進数などで10以上の値なら「F(15)」のように表示する。
+                if (fromBase > 10 && digitVal > 9) {
+                    charStr = `${char}(${digitVal})`;
+                }
+
+                // 数学的な変換式を説明用配列へ追加する。
+                calcParts.push(`(${charStr} &times; ${formatPower(fromBase, power)})`);
+
+                // 実際の数値を使った計算式を説明用配列へ追加する。
+                detailParts.push(`(${digitVal} &times; ${placeValue.toString()})`);
+            }
+
+            // 基数とべき乗を使った変換式を表示する。
+            html += `計算 = ${calcParts.join(' + ')}<br>`;
+
+            // 実際の数値に置き換えた計算式を表示する。
+            html += `計算 = ${detailParts.join(' + ')}<br>`;
+
+            // 最終的な10進数の合計を表示する。
+            html += `<strong>結果 = ${sum.toString()}<sub>10</sub></strong>`;
+
+            // 計算式の領域を終了する。
+            html += `</div>`;
+
+            // HTMLと、後続の変換でも使用するBigIntの合計値を返す。
+            return { html, sum };
+        }
+
+
+        // ------------------------------------------------------------
+        // 9. 10進数を指定された進数へ変換し、計算過程を作る
+        // ------------------------------------------------------------
+
+        function generateStepsFromDecimal(decimalValue, toBase, stepNumber = 1) {
+            // 計算過程の見出しを作る。
+            let html =
+                `<div class="step-title">` +
+                `<div class="bg-brand-100 text-brand-700 w-6 h-6 rounded-full flex items-center justify-center text-sm">${stepNumber}</div>` +
+                `10進数の ${decimalValue.toString()} を ${toBase}進数 に変換する` +
+                `</div>`;
+
+            // 10進数を割り算の余りから別の進数へ変換する方法を説明する。
+            html +=
+                `<p class="mb-2">` +
+                `10進数を ${toBase}進数に変換するには、数値を ${toBase} で繰り返し割り、その余りを求めます。` +
+                `下から上に向かって余りを並べたものが答えになります。` +
+                `</p>`;
+
+            // 0を変換する場合は通常の割り算ループに入れない。
+            if (decimalValue === 0n) {
+                // 0 ÷ 基数 = 0、余り0という計算過程を表示する。
+                html +=
+                    `<div class="math-block">` +
+                    `0 &divide; ${toBase} = 0, 余り 0<br><br>` +
+                    `結果 = 0` +
+                    `</div>`;
+
+                // 0の変換結果を返す。
+                return { html, resultStr: '0' };
+            }
+
+            // 変換先の進数をBigIntとして用意する。
+            const baseBig = BigInt(toBase);
+
+            // 現在処理している値を10進数のBigIntとして保持する。
+            let currentVal = decimalValue;
+
+            // 各割り算で得られる余りを、最下位桁から順番に保存する。
+            const remainders = [];
+
+            // 計算表を開始する。
+            html += `<div class="math-block">`;
+
+            // 割り算・商・余りの3列を持つ表を開始する。
+            html += `<table class="w-full text-left border-collapse">`;
+
+            // 表の見出しを追加する。
+            html +=
+                `<tr>` +
+                `<th class="border-b border-slate-300 pb-1 pr-4">割り算</th>` +
+                `<th class="border-b border-slate-300 pb-1 pr-4">商</th>` +
+                `<th class="border-b border-slate-300 pb-1">余り</th>` +
+                `</tr>`;
+
+            // 商が0になるまで繰り返し割り算する。
+            while (currentVal > 0n) {
+                // 現在値を基数で整数除算して商を求める。
+                const quotient = currentVal / baseBig;
+
+                // 現在値を基数で割った余りを求める。
+                const remainderBig = currentVal % baseBig;
+
+                // 余りは必ず0〜15なのでNumberへ変換しても精度問題は発生しない。
+                const remainderNum = Number(remainderBig);
+
+                // 余りを変換先進数の文字へ変換する。
+                // 10以上ならA〜Fなどの英字になる。
+                const remStr = remainderNum.toString(toBase).toUpperCase();
+
+                // 10以上の余りは「15 → F」のように対応関係も表示する。
+                const displayRem =
+                    remainderNum > 9
+                        ? `${remainderNum} &rarr; <strong>${remStr}</strong>`
+                        : `<strong>${remStr}</strong>`;
+
+                // 表の1行を開始する。
+                html += `<tr>`;
+
+                // 現在値を基数で割った式を表示する。
+                html += `<td class="py-1 pr-4 text-slate-500">${currentVal.toString()} &divide; ${toBase}</td>`;
+
+                // 商を表示する。
+                html += `<td class="py-1 pr-4">${quotient.toString()}</td>`;
+
+                // 余りを表示する。
+                html += `<td class="py-1 text-brand-600">${displayRem}</td>`;
+
+                // 表の1行を終了する。
+                html += `</tr>`;
+
+                // 余りを最下位桁から順番に保存する。
+                remainders.push(remStr);
+
+                // 次のループでは今回の商を処理する。
+                currentVal = quotient;
+            }
+
+            // 表を終了する。
+            html += `</table>`;
+
+            // 余りを逆順に並べ、最上位桁から順番にした最終結果を作る。
+            const finalResult = remainders.reverse().join('');
+
+            // 最終結果の表示領域を作る。
+            html += `<div class="mt-4 pt-4 border-t border-slate-200">`;
+
+            // 「余りを下から読む」というルールを表示する。
+            html += `余りを下から順に読む: <strong>${finalResult}</strong>`;
+
+            // 最終結果の表示領域と計算ブロックを終了する。
+            html += `</div></div>`;
+
+            // 計算過程と変換結果を返す。
+            return { html, resultStr: finalResult };
+        }
+
+
+        // ------------------------------------------------------------
+        // 10. 実際の変換処理
+        // ------------------------------------------------------------
+
+        function convert() {
+            // 入力値の前後の空白を取り除き、大文字へ統一する。
+            const valStr = numInput.value.trim().toUpperCase();
+
+            // 変換元の進数を取得する。
+            const fromBase = Number.parseInt(fromBaseSelect.value, 10);
+
+            // 変換先の進数を取得する。
+            const toBase = Number.parseInt(toBaseSelect.value, 10);
+
+            // 入力が空なら計算せずエラーを表示する。
+            if (valStr === '') {
+                showError('変換する数値を入力してください。');
+                invalidateResult();
+                return;
+            }
+
+            // 入力文字が変換元の進数として正しいか再確認する。
+            if (!validateInput()) {
+                invalidateResult();
+                return;
+            }
+
+            // 変換元・変換先の設定値が想定外でないことを確認する。
+            if (!ALLOWED_BASES.includes(fromBase) || !ALLOWED_BASES.includes(toBase)) {
+                showError('対応していない進数が選択されています。');
+                invalidateResult();
+                return;
+            }
+
+            // 生成した計算過程を格納する変数を初期化する。
+            let stepsHTML = '';
+
+            // 最終結果を格納する変数を初期化する。
+            let finalResultStr = '';
+
+            // --------------------------------------------------------
+            // パターンA: 変換元と変換先が同じ
+            // --------------------------------------------------------
+
+            if (fromBase === toBase) {
+                // 同じ進数なので数値そのものの変換は不要であることを説明する。
+                stepsHTML =
+                    `<p class="text-slate-600 italic">` +
+                    `変換元と変換先の進数が同じです。変換の必要はありません。` +
+                    `</p>`;
+
+                // 同じ進数の場合は入力値をそのまま結果として表示する。
+                finalResultStr = valStr;
+            }
+
+            // --------------------------------------------------------
+            // パターンB: 任意の進数 → 10進数
+            // --------------------------------------------------------
+
+            else if (toBase === 10) {
+                // 入力値を各桁の重みで10進数へ変換し、計算過程も生成する。
+                const { html, sum } = generateStepsToDecimal(valStr, fromBase);
+
+                // 生成された計算過程を保存する。
+                stepsHTML = html;
+
+                // BigIntの合計値を文字列へ変換して最終結果にする。
+                finalResultStr = sum.toString();
+            }
+
+            // --------------------------------------------------------
+            // パターンC: 10進数 → 任意の進数
+            // --------------------------------------------------------
+
+            else if (fromBase === 10) {
+                // 入力値をBigIntへ直接変換する。
+                // Numberを経由しないため、大きな整数でも精度が落ちない。
+                let decimalValue;
+
+                try {
+                    // 10進数文字列をBigIntとして解釈する。
+                    decimalValue = BigInt(valStr);
+                } catch (error) {
+                    // 通常はvalidateInput()で防げるが、
+                    // 万一BigInt変換に失敗した場合は安全に処理を中止する。
+                    showError('入力された10進数を処理できませんでした。');
+                    invalidateResult();
+                    return;
+                }
+
+                // 10進数から変換先進数への計算過程を生成する。
+                const { html, resultStr } =
+                    generateStepsFromDecimal(decimalValue, toBase, 1);
+
+                // 生成された計算過程を保存する。
+                stepsHTML = html;
+
+                // 変換結果を保存する。
+                finalResultStr = resultStr;
+            }
+
+            // --------------------------------------------------------
+            // パターンD: 10進数以外 → 10進数以外
+            // --------------------------------------------------------
+
+            else {
+                // まず変換元の進数を10進数へ変換する。
+                const step1 = generateStepsToDecimal(valStr, fromBase);
+
+                // 1段階目の計算過程を保存する。
+                stepsHTML += step1.html;
+
+                // 得られたBigIntの10進数値を変換先の進数へ変換する。
+                const step2 =
+                    generateStepsFromDecimal(step1.sum, toBase, 2);
+
+                // 2段階目の計算過程を追加する。
+                stepsHTML += step2.html;
+
+                // 最終結果を保存する。
+                finalResultStr = step2.resultStr;
+            }
+
+            // --------------------------------------------------------
+            // 11. 計算結果を画面へ反映する
+            // --------------------------------------------------------
+
+            // 最終結果をテキストとして表示する。
+            // textContentを使用することで、結果文字列をHTMLとして解釈させない。
+            finalResultEl.textContent = finalResultStr;
+
+            // 変換元と変換先を補足説明として表示する。
+            resultSubtextEl.innerHTML =
+                `<strong>${fromBase}進数</strong> から ` +
+                `<strong>${toBase}進数</strong> への変換結果`;
+
+            // 計算過程を画面へ挿入する。
+            stepsContainer.innerHTML = stepsHTML;
+
+            // 結果セクションを表示する。
+            resultSection.classList.remove('hidden');
+
+            // 結果の位置までスムーズにスクロールする。
+            resultSection.scrollIntoView({
+                behavior: 'smooth',
+                block: 'start'
+            });
+        }
+
+
+        // ------------------------------------------------------------
+        // 12. 進数入れ替え処理
+        // ------------------------------------------------------------
+
+        swapBtn.addEventListener('click', () => {
+            // 現在の変換元の値を一時保存する。
+            const temp = fromBaseSelect.value;
+
+            // 変換先を新しい変換元にする。
+            fromBaseSelect.value = toBaseSelect.value;
+
+            // 一時保存していた元の変換元を新しい変換先にする。
+            toBaseSelect.value = temp;
+
+            // 進数が変わったため、以前の計算結果を無効化する。
+            invalidateResult();
+
+            // 現在の入力値を新しい変換元の進数で再検証する。
+            if (numInput.value.trim() !== '') {
+                validateInput();
+            }
+        });
+
+
+        // ------------------------------------------------------------
+        // 13. 入力変更時の処理
+        // ------------------------------------------------------------
+
+        numInput.addEventListener('input', () => {
+            // 入力内容が変更されたら、まず古い計算結果を隠す。
+            invalidateResult();
+
+            // 入力途中の値を即座に検証する。
+            validateInput();
+        });
+
+
+        fromBaseSelect.addEventListener('change', () => {
+            // 変換元の進数が変わったら古い結果を隠す。
+            invalidateResult();
+
+            // 新しい進数に対して入力値を再検証する。
+            validateInput();
+        });
+
+
+        toBaseSelect.addEventListener('change', () => {
+            // 変換先の進数が変わったら古い結果を隠す。
+            invalidateResult();
+        });
+
+
+        // ------------------------------------------------------------
+        // 14. 計算ボタンのクリック処理
+        // ------------------------------------------------------------
+
+        convertBtn.addEventListener('click', () => {
+            // ボタンが押されたら変換処理本体を実行する。
+            convert();
+        });
+
+
+        // ------------------------------------------------------------
+        // 15. Enterキーによる計算
+        // ------------------------------------------------------------
+
+        numInput.addEventListener('keydown', event => {
+            // 入力欄でEnterキーが押された場合に計算する。
+            if (event.key === 'Enter') {
+                // ブラウザの既定動作を抑止する。
+                event.preventDefault();
+
+                // 通常の「計算する」ボタンと同じ処理を実行する。
+                convert();
+            }
+        });
+
+
+        // ------------------------------------------------------------
+        // 16. 初期化処理
+        // ------------------------------------------------------------
+
+        // 進数の選択肢を生成する。
+        populateBases();
+
+        // ページ内のdata-lucide属性を持つ要素をLucideアイコンへ変換する。
+        lucide.createIcons();
+    </script>
+</body>
+</html>
