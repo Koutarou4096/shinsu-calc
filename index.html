@@ -163,21 +163,21 @@
         const resultSubtextEl = document.getElementById('result-subtext');
         const stepsContainer = document.getElementById('steps-container');
 
-        // Populate base options (2, 8, 10, 16)
+        // [FIX 1] Populate base options from 2 to 36 (was hardcoded to only 2, 8, 10, 16,
+        // which contradicted the header claiming support for "2進数から36進数まで")
         function populateBases() {
-            const allowedBases = [2, 8, 10, 16];
-            allowedBases.forEach(i => {
+            for (let i = 2; i <= 36; i++) {
                 const option1 = document.createElement('option');
                 option1.value = i;
                 option1.textContent = `${i}進数`;
-                
+
                 const option2 = document.createElement('option');
                 option2.value = i;
                 option2.textContent = `${i}進数`;
 
                 fromBaseSelect.appendChild(option1);
                 toBaseSelect.appendChild(option2);
-            });
+            }
             // Set defaults
             fromBaseSelect.value = '10';
             toBaseSelect.value = '2';
@@ -240,25 +240,28 @@
             return `${base}<sup>${power}</sup>`;
         }
 
-        // Generate Steps to Decimal
+        // [FIX 2] Generate Steps to Decimal — now uses BigInt throughout so large inputs
+        // (beyond Number.MAX_SAFE_INTEGER, ~2^53) no longer silently produce wrong results.
         function generateStepsToDecimal(valueStr, fromBase) {
             let html = `<div class="step-title"><div class="bg-brand-100 text-brand-700 w-6 h-6 rounded-full flex items-center justify-center text-sm">1</div> ${fromBase}進数の ${valueStr} を 10進数 に変換する</div>`;
             html += `<p class="mb-2">10進数へ変換するには、各桁の数値に、その桁の重み（基数 ${fromBase} のべき乗）を掛け合わせて合計します。右端の桁の重みは ${fromBase}<sup>0</sup> です。</p>`;
-            
-            let sum = 0;
+
+            const baseBig = BigInt(fromBase);
+            let sum = 0n;
             let calcParts = [];
             let detailParts = [];
             let length = valueStr.length;
 
             html += `<div class="math-block">`;
-            
+
             for (let i = 0; i < length; i++) {
                 let char = valueStr[i].toUpperCase();
                 let digitVal = parseInt(char, fromBase);
                 let power = length - 1 - i;
-                
-                sum += digitVal * Math.pow(fromBase, power);
-                
+                let placeValue = baseBig ** BigInt(power);
+
+                sum += BigInt(digitVal) * placeValue;
+
                 // Show letter conversion for base > 10
                 let charStr = char;
                 if (fromBase > 10 && digitVal > 9) {
@@ -266,53 +269,55 @@
                 }
 
                 calcParts.push(`(${charStr} &times; ${formatPower(fromBase, power)})`);
-                detailParts.push(`(${digitVal} &times; ${Math.pow(fromBase, power)})`);
+                detailParts.push(`(${digitVal} &times; ${placeValue.toString()})`);
             }
 
             html += `計算 = ${calcParts.join(' + ')}<br>`;
             html += `計算 = ${detailParts.join(' + ')}<br>`;
-            html += `<strong>結果 = ${sum}<sub>10</sub></strong>`;
+            html += `<strong>結果 = ${sum.toString()}<sub>10</sub></strong>`;
             html += `</div>`;
 
-            return { html, sum };
+            return { html, sum }; // sum is a BigInt
         }
 
-        // Generate Steps from Decimal
+        // [FIX 2 cont.] Generate Steps from Decimal — decimalValue is now expected to be a BigInt.
         function generateStepsFromDecimal(decimalValue, toBase, stepNumber = 1) {
-            let html = `<div class="step-title"><div class="bg-brand-100 text-brand-700 w-6 h-6 rounded-full flex items-center justify-center text-sm">${stepNumber}</div> 10進数の ${decimalValue} を ${toBase}進数 に変換する</div>`;
+            let html = `<div class="step-title"><div class="bg-brand-100 text-brand-700 w-6 h-6 rounded-full flex items-center justify-center text-sm">${stepNumber}</div> 10進数の ${decimalValue.toString()} を ${toBase}進数 に変換する</div>`;
             html += `<p class="mb-2">10進数を ${toBase}進数に変換するには、数値を ${toBase} で繰り返し割り、その余りを求めます。下から上に向かって余りを並べたものが答えになります。</p>`;
-            
-            if (decimalValue === 0) {
+
+            if (decimalValue === 0n) {
                 html += `<div class="math-block">0 &divide; ${toBase} = 0, 余り 0<br><br>結果 = 0</div>`;
                 return { html, resultStr: "0" };
             }
 
+            const baseBig = BigInt(toBase);
             let currentVal = decimalValue;
             let remainders = [];
-            
+
             html += `<div class="math-block">`;
             html += `<table class="w-full text-left border-collapse">`;
             html += `<tr><th class="border-b border-slate-300 pb-1 pr-4">割り算</th><th class="border-b border-slate-300 pb-1 pr-4">商</th><th class="border-b border-slate-300 pb-1">余り</th></tr>`;
-            
-            while (currentVal > 0) {
-                let quotient = Math.floor(currentVal / toBase);
-                let remainder = currentVal % toBase;
-                let remStr = remainder.toString(toBase).toUpperCase();
-                
-                // For Alpha display
-                let displayRem = remainder > 9 ? `${remainder} &rarr; <strong>${remStr}</strong>` : `<strong>${remStr}</strong>`;
+
+            while (currentVal > 0n) {
+                let quotient = currentVal / baseBig;
+                let remainderBig = currentVal % baseBig;
+                // remainderBig is always < toBase (<= 36), so converting to Number is always safe here.
+                let remainderNum = Number(remainderBig);
+                let remStr = remainderNum.toString(toBase).toUpperCase();
+
+                let displayRem = remainderNum > 9 ? `${remainderNum} &rarr; <strong>${remStr}</strong>` : `<strong>${remStr}</strong>`;
 
                 html += `<tr>`;
-                html += `<td class="py-1 pr-4 text-slate-500">${currentVal} &divide; ${toBase}</td>`;
-                html += `<td class="py-1 pr-4">${quotient}</td>`;
+                html += `<td class="py-1 pr-4 text-slate-500">${currentVal.toString()} &divide; ${toBase}</td>`;
+                html += `<td class="py-1 pr-4">${quotient.toString()}</td>`;
                 html += `<td class="py-1 text-brand-600">${displayRem}</td>`;
                 html += `</tr>`;
-                
+
                 remainders.push(remStr);
                 currentVal = quotient;
             }
             html += `</table>`;
-            
+
             let finalResult = remainders.reverse().join('');
             html += `<div class="mt-4 pt-4 border-t border-slate-200">`;
             html += `余りを下から順に読む: <strong>${finalResult}</strong>`;
@@ -348,11 +353,12 @@
             else if (toBase === 10) {
                 const { html, sum } = generateStepsToDecimal(valStr, fromBase);
                 stepsHTML = html;
-                finalResultStr = sum.toString(10);
+                finalResultStr = sum.toString();
             }
             // Decimal to Any base
             else if (fromBase === 10) {
-                const decimalValue = parseInt(valStr, 10);
+                // Use BigInt to parse directly — avoids precision loss for very large decimal input.
+                const decimalValue = BigInt(valStr);
                 const { html, resultStr } = generateStepsFromDecimal(decimalValue, toBase, 1);
                 stepsHTML = html;
                 finalResultStr = resultStr;
